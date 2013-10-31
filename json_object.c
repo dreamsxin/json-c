@@ -34,10 +34,6 @@
 # error You do not have strdup on your system.
 #endif /* HAVE_STRDUP */
 
-#if !defined(HAVE_STRNDUP)
-  char* strndup(const char* str, size_t n);
-#endif /* !HAVE_STRNDUP */
-
 #if !defined(HAVE_SNPRINTF) && defined(_MSC_VER)
   /* MSC has the version as _snprintf */
 # define snprintf _snprintf
@@ -574,13 +570,14 @@ static int json_object_double_to_json_string(struct json_object* jso,
      ECMA 262 section 9.8.1 defines
      how to handle these cases as strings */
   if(isnan(jso->o.c_double))
-    size = snprintf(buf, 128, "NaN");
-  else if(isinf(jso->o.c_double) == 1)
-    size = snprintf(buf, 128, "Infinity");
-  else if(isinf(jso->o.c_double) == -1)
-    size = snprintf(buf, 128, "-Infinity");
+    size = snprintf(buf, sizeof(buf), "NaN");
+  else if(isinf(jso->o.c_double))
+    if(jso->o.c_double > 0)
+      size = snprintf(buf, sizeof(buf), "Infinity");
+    else
+      size = snprintf(buf, sizeof(buf), "-Infinity");
   else
-    size = snprintf(buf, 128, "%f", jso->o.c_double);
+    size = snprintf(buf, sizeof(buf), "%.17g", jso->o.c_double);
 
   p = strchr(buf, ',');
   if (p) {
@@ -604,11 +601,36 @@ static int json_object_double_to_json_string(struct json_object* jso,
 
 struct json_object* json_object_new_double(double d)
 {
-  struct json_object *jso = json_object_new(json_type_double);
-  if(!jso) return NULL;
-  jso->_to_json_string = &json_object_double_to_json_string;
-  jso->o.c_double = d;
-  return jso;
+	struct json_object *jso = json_object_new(json_type_double);
+	if (!jso)
+		return NULL;
+	jso->_to_json_string = &json_object_double_to_json_string;
+	jso->o.c_double = d;
+	return jso;
+}
+
+struct json_object* json_object_new_double_s(double d, const char *ds)
+{
+	struct json_object *jso = json_object_new_double(d);
+	if (!jso)
+		return NULL;
+
+	json_object_set_serializer(jso, json_object_userdata_to_json_string,
+	    strdup(ds), json_object_free_userdata);
+	return jso;
+}
+
+int json_object_userdata_to_json_string(struct json_object *jso,
+	struct printbuf *pb, int level, int flags)
+{
+	int userdata_len = strlen(jso->_userdata);
+	printbuf_memappend(pb, jso->_userdata, userdata_len);
+	return userdata_len;
+}
+
+void json_object_free_userdata(struct json_object *jso, void *userdata)
+{
+	free(userdata);
 }
 
 double json_object_get_double(struct json_object *jso)
