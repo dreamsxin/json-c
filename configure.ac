@@ -3,23 +3,16 @@ AC_PREREQ(2.52)
 # Process this file with autoconf to produce a configure script.
 AC_INIT([json-c], 0.11.99, [json-c@googlegroups.com])
 
-AM_INIT_AUTOMAKE(AC_PACKAGE_NAME, AC_PACKAGE_VERSION)
+AM_INIT_AUTOMAKE
 
 AC_PROG_MAKE_SET
-
-AC_ARG_ENABLE(oldname-compat,
- AS_HELP_STRING([--disable-oldname-compat],
-   [Don't include the old libjson.so library and include/json directory.]),
-[],
-[enable_oldname_compat=yes]
-)
-AM_CONDITIONAL(ENABLE_OLDNAME_COMPAT, [test "x${enable_oldname_compat}" != "xno"])
 
 # Checks for programs.
 
 # Checks for libraries.
 
 # Checks for header files.
+AM_PROG_CC_C_O
 AC_CONFIG_HEADER(config.h)
 AC_CONFIG_HEADER(json_config.h)
 AC_HEADER_STDC
@@ -36,6 +29,11 @@ AC_FUNC_MEMCMP
 AC_FUNC_MALLOC
 AC_FUNC_REALLOC
 AC_CHECK_FUNCS(strcasecmp strdup strerror snprintf vsnprintf vasprintf open vsyslog strncasecmp setlocale)
+AC_CHECK_DECLS([nan], [], [], [[#include <math.h>]])
+AC_CHECK_DECLS([isnan], [], [], [[#include <math.h>]])
+AC_CHECK_DECLS([isinf], [], [], [[#include <math.h>]])
+AC_CHECK_DECLS([_isnan], [], [], [[#include <float.h>]])
+AC_CHECK_DECLS([_finite], [], [], [[#include <float.h>]])
 
 #check if .section.gnu.warning accepts long strings (for __warn_references)
 AC_LANG_PUSH([C])
@@ -57,9 +55,34 @@ AC_LANG_POP([C])
 
 AM_PROG_LIBTOOL
 
+# Check for the -Bsymbolic-functions linker flag
+AC_ARG_ENABLE([Bsymbolic],
+              [AS_HELP_STRING([--disable-Bsymbolic], [Avoid linking with -Bsymbolic-function])],
+              [],
+              [enable_Bsymbolic=check])
+
+AS_IF([test "x$enable_Bsymbolic" = "xcheck"],
+      [
+        saved_LDFLAGS="${LDFLAGS}"
+        AC_MSG_CHECKING([for -Bsymbolic-functions linker flag])
+        LDFLAGS=-Wl,-Bsymbolic-functions
+        AC_TRY_LINK([], [int main (void) { return 0; }],
+                    [
+                      AC_MSG_RESULT([yes])
+                      enable_Bsymbolic=yes
+                    ],
+                    [
+                      AC_MSG_RESULT([no])
+                      enable_Bsymbolic=no
+                    ])
+        LDFLAGS="${saved_LDFLAGS}"
+      ])
+
+AS_IF([test "x$enable_Bsymbolic" = "xyes"], [JSON_BSYMBOLIC_LDFLAGS=-Wl[,]-Bsymbolic-functions])
+AC_SUBST(JSON_BSYMBOLIC_LDFLAGS)
+
 AC_CONFIG_FILES([
 Makefile
-json.pc
 json-c.pc
 tests/Makefile
 json-c-uninstalled.pc
